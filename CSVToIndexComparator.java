@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.stream.Stream;
@@ -21,9 +23,14 @@ import org.apache.lucene.store.FSDirectory;
 public class CSVToIndexComparator {
 
     private final HashSet<String> indexIds = new HashSet<>();
+    private final HashSet<String> uniqueCsvIds = new HashSet<>();
+    private final ArrayList<String> duplicateIds = new ArrayList<>();
+    private int duplicateCount = 0;
     private final HashMap<Path, ArrayList<String>> csvIdWithFileName = new HashMap<>();
-    private static final String index_path = "C:\\workspace\\projects\\poc\\chatbot\\compare-li\\csv_to_index\\index";
-    private static final String csv_path = "C:\\workspace\\projects\\poc\\chatbot\\compare-li\\csv_to_index\\csv";
+    private static final String index_path =
+            "C:\\workspace\\projects\\poc\\chatbot\\compare-li\\csv_to_index\\index";
+    private static final String csv_path =
+            "C:\\workspace\\projects\\poc\\chatbot\\compare-li\\csv_to_index\\csv";
     private int totalCSVIdsCount = 0;
     private int mismatchCount = 0;
 
@@ -38,14 +45,14 @@ public class CSVToIndexComparator {
     private void checkCsvIdIsExistsOnLuceneIndex() {
         csvIdWithFileName.forEach((path, strings) -> {
             mismatchCount = 0;
-            strings.forEach(s -> {
-                if (!indexIds.contains(s)) {
+            strings.forEach(documentId -> {
+                if (!indexIds.contains(documentId)) {
                     mismatchCount++;
                 }
             });
             System.out.println("CSV filename : " + path.getFileName()
                     + ", CSV Id Count : " + strings.size()
-                    + ", Mismatch ids count with lucene : " + mismatchCount);
+                    + ", Mismatch document count with lucene : " + mismatchCount);
         });
     }
 
@@ -53,10 +60,15 @@ public class CSVToIndexComparator {
         csvIdWithFileName.forEach((path, strings) -> {
             totalCSVIdsCount += strings.size();
         });
-
-        System.out.println("Total csv files: " + csvIdWithFileName.size());
-        System.out.println("Lucene index count :" + indexIds.size());
-        System.out.println("Total csv id's count: " + totalCSVIdsCount);
+        Collections.sort(duplicateIds);
+        System.out.println("Duplicate document list : " + duplicateIds.toString());
+        System.out.println("Total processed csv files : " + csvIdWithFileName.size());
+        System.out.println("Lucene document count (including duplicate) :" + (indexIds.size() + duplicateCount));
+        System.out.println("Lucene duplicate document count : " + duplicateCount);
+        System.out.println("Lucene unique document count :" + indexIds.size());
+        System.out.println("CSV id's count (including duplicate) : " + totalCSVIdsCount);
+        System.out.println("CSV Unique csv id's count: " + uniqueCsvIds.size());
+        System.out.println("CSV duplicate document count : " + (totalCSVIdsCount - uniqueCsvIds.size()));
     }
 
     private void loadAllCsv() {
@@ -81,6 +93,7 @@ public class CSVToIndexComparator {
             for (CSVRecord csvRecord : csvParser) {
                 csvIndexId.add(csvRecord.get(0));
             }
+            uniqueCsvIds.addAll(csvIndexId);
             csvIdWithFileName.put(filePath, csvIndexId);
         } catch (IOException e) {
             e.printStackTrace();
@@ -94,9 +107,14 @@ public class CSVToIndexComparator {
             IndexReader reader = DirectoryReader.open(index);
             for (int i = 0; i < reader.maxDoc(); i++) {
                 Document doc = reader.document(i);
-                indexIds.add(doc.get("uri_s"));
+                if (!indexIds.contains(doc.get("uri_s")))
+                    indexIds.add(doc.get("uri_s"));
+                else {
+                    duplicateCount++;
+                    duplicateIds.add(doc.get("uri_s"));
+                }
             }
-            System.out.println("Added index into lucene data class");
+            System.out.println("Added index into lucene data class ");
         } catch (Exception e) {
             e.printStackTrace();
         }
